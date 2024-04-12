@@ -1,2 +1,2 @@
 # Empirical-Asset-Pricing
-This repo is for empiprical asset pricing using Python, including portfolio analysis, FM regression analysis， cross-section regression analysis and time-seires analysis. 
+This repo document code for <<Empiprical Asset Pricing>>(bali, 2016) using Python, including portfolio analysis and FM regression analysis. We will present the code implementations in the order they appear in the book。This repo go as follow: (1) Univariate Portfolio Analysis, (2) Bivariate Independent-Sort Analysis, (3) Bivariate Dependent-Sort Analysis; The open-source pdf version of <<Empircial Asset Pricing>> is here
