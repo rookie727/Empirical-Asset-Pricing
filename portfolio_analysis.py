@@ -1,6 +1,5 @@
 import numpy as np
 import pandas as pd
-import itertools
 '''
 The univariate portfolio analysis procedure has four steps.
  - The first step is to calculate the breakpoints that will be used to divide the sample into portfolios. 
@@ -11,83 +10,79 @@ The univariate portfolio analysis procedure has four steps.
 '''
 
 class PortfolioAnalysis():
-    def __init__(self, dataframe: pd.DataFrame) -> None:
+    def __init__(self, dataframe: pd.DataFrame):
         # 判断传入的数据是否为 DataFrame
         if type(dataframe) is not pd.DataFrame:
-            raise ValueError("传入的数据不是 DataFrame 格式")
+            raise ValueError("Not DataFrame format")
         
-        self.dataframe = dataframe  # 初始化数据
+        self.df = dataframe  # initial dataframe
     
     def breakpoint(self, feature_percentiles: dict[str, list[int]]) -> dict[str, np.ndarray]:
         '''
+        The first step is to calculate the breakpoints that will be used to divide the sample into portfolios.
         Calculate breakpoints for each feature based on the given percentiles.
 
         Args:
-            percentiles (dict[str, list[int]]): A dictionary containing column names as keys and corresponding percentile lists as values.
+            feature_percentiles (dict): A dictionary containing column names as keys and corresponding percentile lists as values.
+
+            Example:
+            feature_percentiles = {
+                'feature1': [10, 30, 50, 70, 90],
+                'feature2': [20, 40, 60, 80]
+            }
 
         Returns:
-            breakpoints (dict[str, np.ndarray]): A dictionary containing column names as keys and arrays of percentiles as breakpoints as values.
+            dict: A dictionary containing column names as keys and arrays of percentiles as breakpoints as values.
 
         Raises:
             ValueError: If the provided percentiles are not in list format.
         '''
+
         breakpoints_dict = {}
 
         for feature, percentiles_list in feature_percentiles.items():
             if not isinstance(percentiles_list, list):
-                raise ValueError("百分位数必须是列表格式")
+                raise ValueError("The provided percentiles are not in list format.")
             
             percentiles_list = sorted(percentiles_list)
-            if percentiles_list[0] != 0:
-                percentiles_list.insert(0, 0)
-            if percentiles_list[-1] != 100:
-                percentiles_list.append(100)
+            if percentiles_list[0] == 0:
+                percentiles_list.pop(0)
+            if percentiles_list[-1] == 100:
+                percentiles_list.pop(-1)
 
             breakpoints_dict[feature] = np.percentile(self.dataframe[feature].values, percentiles_list)
+            # Not including zero and 100%
 
         return breakpoints_dict
 
 
-    def portfolio_formation(self, breakpoints_dict):
-        '''
-        Generate multivariate portfolios based on breakpoints for each feature.
 
+
+    def portfolio_formation(self, breakpoints_dict: dict[str, np.ndarray], const: str='bi') -> np.ndarray:
+        '''
+            The second step is to use these breakpoints to form the portfolios.
+            Generate multivariate portfolios based on breakpoints for each feature.
         Args:
-        breakpoints_dict (dict): A dictionary where keys represent feature names and values represent lists of breakpoints for each feature.
+            breakpoints_dict (dict): A dictionary where keys represent feature names and values represent lists of breakpoints for each feature.
+            const (str, optional): Type of portfolios to generate. Defaults to 'univariate'. Another is bivariate
         
         Returns:
-        np.ndarray: An array where each row represents a sample and each column represents a portfolio label.
+            np.ndarray: An array where each row represents a sample and each column represents a portfolio label.
 
         Note:
-        This function generates portfolios based on breakpoints provided for each feature. It computes labels for each sample based on these breakpoints and returns an array of portfolio labels.
+            This function generates portfolios based on breakpoints provided for each feature. It computes labels for each sample based on these breakpoints and returns an array of portfolio labels.
         '''
-        n = self.dataframe.shape[0]  # Number of samples
-        num_features = len(breakpoints_dict)  # Number of features
-        num_breakpoints = [len(breakpoints) - 1 for breakpoints in breakpoints_dict.values()]  # Number of breakpoints for each feature; including 0% and 100%
-        p = np.prod(num_breakpoints)  # Number of portfolios, e.g., [0, 30, 70, 100] -> 3 portfolios
 
-        portfolio_labels = np.zeros((n, p))
+        for feature, breakpoint in breakpoints_dict.items():
+            bins = sorted(breakpoint + [-np.inf, np.inf])
+            self.df[feature+'_group'] = pd.cut(self.df[feature], bins=bins, labels=False, right=True)
 
-        # Generate all possible combinations of breakpoints for all features
-        breakpoints_combinations = np.array(list(itertools.product(*[range(i) for i in num_breakpoints])))
+        if const == 'uni':
+            self.df['portfolio'] = self.df[list(breakpoints_dict.keys())[0]+'_group']  
+        if const == 'bi':
+            self.df['portfolio'] = list(zip(self.df[list(breakpoints_dict.keys())[0]+'_group'], self.df[list(breakpoints_dict.keys())[1]+'_group']))
 
-        # Convert breakpoints to numpy arrays for efficient broadcasting
-        breakpoints_arrays = {feature: np.array(breakpoints) for feature, breakpoints in breakpoints_dict.items()}
-
-        # Iterate through each combination of breakpoints
-        for i, breakpoints_tuple in enumerate(breakpoints_combinations):
-            # Get start and end breakpoints for each feature using broadcasting
-            breakpoints_start = np.array([breakpoints_arrays[feature][breakpoint_index] for feature, breakpoint_index in zip(breakpoints_dict.keys(), breakpoints_tuple)])
-            breakpoints_end = np.array([breakpoints_arrays[feature][breakpoint_index + 1] for feature, breakpoint_index in zip(breakpoints_dict.keys(), breakpoints_tuple)])
-
-            # Compute labels for each sample based on breakpoints for all features
-            temp_labels = np.sum((self.dataframe.values >= breakpoints_start) & (self.dataframe.values <= breakpoints_end), axis=1)
-
-            # Assign the temporary labels to the corresponding column in the portfolio_labels array
-            portfolio_labels[:, i] = temp_labels
-
-        return portfolio_labels
-
+        return self.df['portfolio'].values
 
     def average_portfolio_values(self, portfolio_label: np.ndarray, outcome: np.ndarray, weight: np.ndarray=None):
         """
